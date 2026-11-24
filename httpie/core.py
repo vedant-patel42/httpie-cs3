@@ -66,6 +66,15 @@ def raw_main(
         if include_traceback:
             raise
 
+    def handle_control_exception(exc):
+        if isinstance(exc, KeyboardInterrupt):
+            env.stderr.write('\n')
+            return ExitStatus.ERROR_CTRL_C
+        if exc.code != ExitStatus.SUCCESS:
+            env.stderr.write('\n')
+            return ExitStatus.ERROR
+        return ExitStatus.SUCCESS
+
     if include_debug_info:
         print_debug_info(env)
         if args == ['--debug']:
@@ -83,17 +92,10 @@ def raw_main(
         if include_traceback:
             raise
         exit_status = ExitStatus.ERROR
-    except KeyboardInterrupt:
-        env.stderr.write('\n')
-        if include_traceback:
+    except (KeyboardInterrupt, SystemExit) as exc:
+        exit_status = handle_control_exception(exc)
+        if include_traceback and exit_status != ExitStatus.SUCCESS:
             raise
-        exit_status = ExitStatus.ERROR_CTRL_C
-    except SystemExit as e:
-        if e.code != ExitStatus.SUCCESS:
-            env.stderr.write('\n')
-            if include_traceback:
-                raise
-            exit_status = ExitStatus.ERROR
     else:
         check_updates(env)
         try:
@@ -101,17 +103,10 @@ def raw_main(
                 args=parsed_args,
                 env=env,
             )
-        except KeyboardInterrupt:
-            env.stderr.write('\n')
-            if include_traceback:
+        except (KeyboardInterrupt, SystemExit) as exc:
+            exit_status = handle_control_exception(exc)
+            if include_traceback and exit_status != ExitStatus.SUCCESS:
                 raise
-            exit_status = ExitStatus.ERROR_CTRL_C
-        except SystemExit as e:
-            if e.code != ExitStatus.SUCCESS:
-                env.stderr.write('\n')
-                if include_traceback:
-                    raise
-                exit_status = ExitStatus.ERROR
         except requests.Timeout:
             exit_status = ExitStatus.ERROR_TIMEOUT
             env.log_error(f'Request timed out ({parsed_args.timeout}s).')
